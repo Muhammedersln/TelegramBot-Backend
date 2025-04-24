@@ -217,21 +217,8 @@ const setupWebhook = (app) => {
           
           console.log('Update verisi:', JSON.stringify(update).slice(0, 200) + '...');
           
-          // Mesaj kontrolü
-          if (update.message) {
-            console.log('Mesaj alındı:', update.message.text);
-            bot.processUpdate(update);
-          } 
-          // Callback query kontrolü
-          else if (update.callback_query) {
-            console.log('Callback query alındı:', update.callback_query.data);
-            bot.processUpdate(update);
-          }
-          // Diğer güncellemeler
-          else {
-            console.log('Diğer update tipi alındı');
-            bot.processUpdate(update);
-          }
+          // Mesajı doğrudan işle - bu yaklaşım daha güvenilir
+          bot.processUpdate(update);
           
           console.log('Webhook isteği başarıyla işlendi');
           return res.sendStatus(200);
@@ -240,11 +227,27 @@ const setupWebhook = (app) => {
           return res.sendStatus(200); // Telegram expects 200 OK even for errors
         }
       });
+
+      // Webhook bilgilerini kontrol etme endpoint'i
+      app.get('/api/webhook/status', (req, res) => {
+        bot.getWebHookInfo()
+          .then(info => {
+            res.json({ status: 'success', webhookInfo: info });
+          })
+          .catch(error => {
+            res.json({ status: 'error', error: error.message });
+          });
+      });
     } catch (error) {
       console.error('Webhook ayarlanırken hata oluştu:', error);
     }
   } else {
     console.log("Bot polling modunda çalışıyor.");
+    
+    // Hata ayıklama için fazladan log ekle
+    bot.on('polling_error', (error) => {
+      console.error('Polling hatası:', error);
+    });
   }
 };
 

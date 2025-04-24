@@ -24,6 +24,13 @@ app.use(express.json({
 // Webhook pathlerini log'la (debug için)
 app.use((req, res, next) => {
   console.log('Request received:', req.method, req.path);
+  console.log('Headers:', JSON.stringify(req.headers));
+  
+  // Bot isteklerini kabul et
+  if (req.path.includes('/api/webhook/')) {
+    console.log('Bot webhook isteği alındı');
+  }
+  
   next();
 });
 
@@ -61,6 +68,11 @@ app.get('/api/exchanges', (req, res) => {
 
 // Bot için webhook'u ayarla
 setupWebhook(app);
+
+// 404 handler - en sonda olmalı
+app.use((req, res) => {
+  res.status(404).json({ error: 'Endpoint bulunamadı' });
+});
 
 // Sunucuyu başlat (development ortamında)
 if (process.env.NODE_ENV !== 'production') {
