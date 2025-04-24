@@ -175,8 +175,15 @@ const setupWebhook = (app) => {
     
     // Gelen webhook isteklerini işle
     app.post(`/webhook/${token}`, (req, res) => {
-      bot.processUpdate(req.body);
-      res.sendStatus(200);
+      console.log('Webhook request received:', JSON.stringify(req.body));
+      try {
+        bot.handleUpdate(req.body);
+        console.log('Webhook request processed successfully');
+        return res.sendStatus(200);
+      } catch (error) {
+        console.error('Error processing webhook request:', error);
+        return res.sendStatus(500);
+      }
     });
     console.log(`Webhook set to: ${url}/webhook/${token}`);
   } else {

@@ -6,9 +6,26 @@ const { setupWebhook } = require('./bot');
 // Express uygulaması oluştur
 const app = express();
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// CORS ve JSON middleware'leri (webhook öncesi)
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// JSON body parser - büyük request'ler için limit arttırıldı
+app.use(express.json({ 
+  limit: '10mb',
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
+
+// Webhook pathlerini log'la (debug için)
+app.use((req, res, next) => {
+  console.log('Request received:', req.method, req.path);
+  next();
+});
 
 // API status endpoint
 app.get('/', (req, res) => {
