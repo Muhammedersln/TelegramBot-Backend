@@ -181,60 +181,70 @@ bot.on('message', (msg) => {
 const setupWebhook = (app) => {
   if (!isDevelopment) {
     try {
+      // Vercel URL kontrolü
+      if (!process.env.VERCEL_URL) {
+        console.error('VERCEL_URL çevre değişkeni tanımlanmamış!');
+        console.log('Webhook ayarlanamadı. Lütfen Vercel proje ayarlarında VERCEL_URL çevre değişkenini tanımlayın.');
+        return;
+      }
+      
       const url = `https://${process.env.VERCEL_URL}`;
-      const webhookPath = `/webhook/${token}`;
+      const webhookPath = `/api/webhook/${token}`;
       const fullWebhookUrl = `${url}${webhookPath}`;
+      
+      console.log(`Webhook URL'si ayarlanıyor: ${fullWebhookUrl}`);
       
       bot.setWebHook(fullWebhookUrl)
         .then(() => {
-          console.log(`Webhook set successfully to: ${fullWebhookUrl}`);
+          console.log(`Webhook başarıyla ayarlandı: ${fullWebhookUrl}`);
         })
         .catch(error => {
-          console.error('Error setting webhook:', error);
+          console.error('Webhook ayarlanırken hata oluştu:', error);
         });
       
       // Gelen webhook isteklerini işle
       app.post(webhookPath, (req, res) => {
-        console.log('Webhook request received, body type:', typeof req.body);
+        console.log('Webhook isteği alındı');
         
         try {
           // Telegram API'den gelen update verisinin yapısını kontrol et
           const update = req.body;
           
           if (!update) {
-            console.error('Empty update received');
+            console.error('Boş update alındı');
             return res.sendStatus(200); // Telegram expects 200 OK even for errors
           }
           
-          console.log('Update data:', JSON.stringify(update));
+          console.log('Update verisi:', JSON.stringify(update).slice(0, 200) + '...');
           
           // Mesaj kontrolü
           if (update.message) {
-            console.log('Message received:', update.message.text);
-            bot.emit('message', update.message);
+            console.log('Mesaj alındı:', update.message.text);
+            bot.processUpdate(update);
           } 
           // Callback query kontrolü
           else if (update.callback_query) {
-            console.log('Callback query received:', update.callback_query.data);
-            bot.emit('callback_query', update.callback_query);
+            console.log('Callback query alındı:', update.callback_query.data);
+            bot.processUpdate(update);
           }
           // Diğer güncellemeler
           else {
-            console.log('Other update type received');
+            console.log('Diğer update tipi alındı');
+            bot.processUpdate(update);
           }
           
-          console.log('Webhook request processed successfully');
+          console.log('Webhook isteği başarıyla işlendi');
           return res.sendStatus(200);
         } catch (error) {
-          console.error('Error processing webhook request:', error);
+          console.error('Webhook isteği işlenirken hata oluştu:', error);
           return res.sendStatus(200); // Telegram expects 200 OK even for errors
         }
       });
     } catch (error) {
-      console.error('Error in webhook setup:', error);
+      console.error('Webhook ayarlanırken hata oluştu:', error);
     }
   } else {
-    console.log("Bot running in polling mode.");
+    console.log("Bot polling modunda çalışıyor.");
   }
 };
 
