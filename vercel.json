@@ -13,6 +13,10 @@
       "methods": ["POST"]
     },
     {
+      "src": "/api/bot/(.*)",
+      "dest": "index.js"
+    },
+    {
       "src": "/(.*)",
       "dest": "index.js",
       "headers": {
@@ -21,5 +25,8 @@
         "Access-Control-Allow-Headers": "Content-Type, Authorization"
       }
     }
-  ]
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
 } 

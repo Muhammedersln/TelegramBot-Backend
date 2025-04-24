@@ -7,16 +7,30 @@ if (!token) {
   throw new Error('TELEGRAM_BOT_TOKEN is not defined in environment variables');
 }
 
-// Bot oluşturulması - production'da webhook kullan, development'ta polling
-const isDevelopment = !process.env.VERCEL_URL;
+// Botun çalışma modunu belirle
+const isDevelopment =  'production';
+const usePolling = 'true' || isDevelopment;
+
 let bot;
 
 // Güvenli bot başlatma
 try {
-  bot = new TelegramBot(token, { polling: isDevelopment });
-  console.log('Bot instance created successfully');
+  if (usePolling) {
+    console.log('Bot polling modunda başlatılıyor...');
+    bot = new TelegramBot(token, { polling: true });
+    console.log('Bot polling modunda başarıyla başlatıldı');
+    
+    // Polling hatalarını yakala
+    bot.on('polling_error', (error) => {
+      console.error('Polling hatası:', error);
+    });
+  } else {
+    console.log('Bot webhook modunda başlatılıyor...');
+    bot = new TelegramBot(token, { polling: false });
+    console.log('Bot webhook modunda başarıyla başlatıldı');
+  }
 } catch (error) {
-  console.error('Error creating bot instance:', error);
+  console.error('Bot örneği oluşturulurken hata:', error);
   // Fallback bot oluştur
   bot = new TelegramBot(token, { polling: false });
 }
@@ -167,33 +181,25 @@ bot.on('callback_query', (callbackQuery) => {
   bot.answerCallbackQuery(callbackQuery.id);
 });
 
-// Diğer mesajlara yanıt (polling modundayken)
-bot.on('message', (msg) => {
-  const chatId = msg.chat.id;
-  
-  // Sadece /start dışındaki mesajları ve callback query olmayanları yakala (polling için)
-  if (isDevelopment && !msg.text?.match(/^\/start/) && !msg.callback_query) {
-    bot.sendMessage(chatId, 'Anlaşılmadı. Lütfen menüden bir seçenek seçin veya /start yazarak başlangıç menüsüne dönün.');
-  }
-});
-
 // Webhook'u ayarlama fonksiyonu
 const setupWebhook = (app) => {
-  if (!isDevelopment) {
+  if (!usePolling) {
     try {
       // Vercel URL kontrolü
-      if (!process.env.VERCEL_URL) {
+      const vercelUrl = process.env.VERCEL_URL;
+      if (!vercelUrl) {
         console.error('VERCEL_URL çevre değişkeni tanımlanmamış!');
         console.log('Webhook ayarlanamadı. Lütfen Vercel proje ayarlarında VERCEL_URL çevre değişkenini tanımlayın.');
         return;
       }
       
-      const url = `https://${process.env.VERCEL_URL}`;
+      const url = `https://${vercelUrl}`;
       const webhookPath = `/api/webhook/${token}`;
       const fullWebhookUrl = `${url}${webhookPath}`;
       
       console.log(`Webhook URL'si ayarlanıyor: ${fullWebhookUrl}`);
       
+      // Webhook temizle ve yeniden ayarla
       bot.setWebHook(fullWebhookUrl)
         .then(() => {
           console.log(`Webhook başarıyla ayarlandı: ${fullWebhookUrl}`);
@@ -217,7 +223,7 @@ const setupWebhook = (app) => {
           
           console.log('Update verisi:', JSON.stringify(update).slice(0, 200) + '...');
           
-          // Mesajı doğrudan işle - bu yaklaşım daha güvenilir
+          // Mesajı doğrudan işle
           bot.processUpdate(update);
           
           console.log('Webhook isteği başarıyla işlendi');
@@ -227,27 +233,43 @@ const setupWebhook = (app) => {
           return res.sendStatus(200); // Telegram expects 200 OK even for errors
         }
       });
-
-      // Webhook bilgilerini kontrol etme endpoint'i
-      app.get('/api/webhook/status', (req, res) => {
-        bot.getWebHookInfo()
-          .then(info => {
-            res.json({ status: 'success', webhookInfo: info });
+      
+      // Botun durumunu kontrol etmek için bir endpoint
+      app.get('/api/bot/status', (req, res) => {
+        bot.getMe()
+          .then(botInfo => {
+            res.json({
+              status: 'online',
+              bot: {
+                id: botInfo.id,
+                name: botInfo.first_name,
+                username: botInfo.username
+              },
+              mode: usePolling ? 'polling' : 'webhook'
+            });
           })
           .catch(error => {
-            res.json({ status: 'error', error: error.message });
+            res.status(500).json({
+              status: 'error',
+              error: error.message
+            });
           });
       });
     } catch (error) {
       console.error('Webhook ayarlanırken hata oluştu:', error);
     }
   } else {
-    console.log("Bot polling modunda çalışıyor.");
+    console.log("Bot polling modunda çalışıyor, webhook ayarlanmadı.");
     
-    // Hata ayıklama için fazladan log ekle
-    bot.on('polling_error', (error) => {
-      console.error('Polling hatası:', error);
-    });
+    // Durum kontrolü için endpoint
+    if (app) {
+      app.get('/api/bot/status', (req, res) => {
+        res.json({
+          status: 'online',
+          mode: 'polling'
+        });
+      });
+    }
   }
 };
 
