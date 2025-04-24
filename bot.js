@@ -9,7 +9,17 @@ if (!token) {
 
 // Bot oluşturulması - production'da webhook kullan, development'ta polling
 const isDevelopment = !process.env.VERCEL_URL;
-const bot = new TelegramBot(token, { polling: isDevelopment });
+let bot;
+
+// Güvenli bot başlatma
+try {
+  bot = new TelegramBot(token, { polling: isDevelopment });
+  console.log('Bot instance created successfully');
+} catch (error) {
+  console.error('Error creating bot instance:', error);
+  // Fallback bot oluştur
+  bot = new TelegramBot(token, { polling: false });
+}
 
 // Mock veri - Airdroplar ve borsalar
 const airdropData = [
@@ -170,22 +180,59 @@ bot.on('message', (msg) => {
 // Webhook'u ayarlama fonksiyonu
 const setupWebhook = (app) => {
   if (!isDevelopment) {
-    const url = `https://${process.env.VERCEL_URL}`;
-    bot.setWebHook(`${url}/webhook/${token}`);
-    
-    // Gelen webhook isteklerini işle
-    app.post(`/webhook/${token}`, (req, res) => {
-      console.log('Webhook request received:', JSON.stringify(req.body));
-      try {
-        bot.handleUpdate(req.body);
-        console.log('Webhook request processed successfully');
-        return res.sendStatus(200);
-      } catch (error) {
-        console.error('Error processing webhook request:', error);
-        return res.sendStatus(500);
-      }
-    });
-    console.log(`Webhook set to: ${url}/webhook/${token}`);
+    try {
+      const url = `https://${process.env.VERCEL_URL}`;
+      const webhookPath = `/webhook/${token}`;
+      const fullWebhookUrl = `${url}${webhookPath}`;
+      
+      bot.setWebHook(fullWebhookUrl)
+        .then(() => {
+          console.log(`Webhook set successfully to: ${fullWebhookUrl}`);
+        })
+        .catch(error => {
+          console.error('Error setting webhook:', error);
+        });
+      
+      // Gelen webhook isteklerini işle
+      app.post(webhookPath, (req, res) => {
+        console.log('Webhook request received, body type:', typeof req.body);
+        
+        try {
+          // Telegram API'den gelen update verisinin yapısını kontrol et
+          const update = req.body;
+          
+          if (!update) {
+            console.error('Empty update received');
+            return res.sendStatus(200); // Telegram expects 200 OK even for errors
+          }
+          
+          console.log('Update data:', JSON.stringify(update));
+          
+          // Mesaj kontrolü
+          if (update.message) {
+            console.log('Message received:', update.message.text);
+            bot.emit('message', update.message);
+          } 
+          // Callback query kontrolü
+          else if (update.callback_query) {
+            console.log('Callback query received:', update.callback_query.data);
+            bot.emit('callback_query', update.callback_query);
+          }
+          // Diğer güncellemeler
+          else {
+            console.log('Other update type received');
+          }
+          
+          console.log('Webhook request processed successfully');
+          return res.sendStatus(200);
+        } catch (error) {
+          console.error('Error processing webhook request:', error);
+          return res.sendStatus(200); // Telegram expects 200 OK even for errors
+        }
+      });
+    } catch (error) {
+      console.error('Error in webhook setup:', error);
+    }
   } else {
     console.log("Bot running in polling mode.");
   }
