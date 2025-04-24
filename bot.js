@@ -2,14 +2,11 @@ require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 
 // Bot token
-const token = process.env.TELEGRAM_BOT_TOKEN;
-if (!token) {
-  throw new Error('TELEGRAM_BOT_TOKEN is not defined in environment variables');
-}
+const token = process.env.TELEGRAM_BOT_TOKEN || '7861575530:AAFenotTwpAqjLoEFalw3vDBkDrZq8Vse8A';
 
-// Botun çalışma modunu belirle
-const isDevelopment =  'production';
-const usePolling = 'true' || isDevelopment;
+// Botun çalışma modunu belirle - webhook moduna geçiyoruz
+const isDevelopment = process.env.NODE_ENV !== 'production';
+const usePolling = false; // Polling'i devre dışı bırak
 
 let bot;
 
@@ -182,16 +179,11 @@ bot.on('callback_query', (callbackQuery) => {
 });
 
 // Webhook'u ayarlama fonksiyonu
-const setupWebhook = (app) => {
-  if (!usePolling) {
+const setupWebhook = (app, force = false) => {
+  if (!usePolling || force) {
     try {
-      // Vercel URL kontrolü
-      const vercelUrl = process.env.VERCEL_URL;
-      if (!vercelUrl) {
-        console.error('VERCEL_URL çevre değişkeni tanımlanmamış!');
-        console.log('Webhook ayarlanamadı. Lütfen Vercel proje ayarlarında VERCEL_URL çevre değişkenini tanımlayın.');
-        return;
-      }
+      // Vercel URL'yi doğrudan belirt
+      const vercelUrl = process.env.VERCEL_URL || 'telegram-bot-backend-coral.vercel.app';
       
       const url = `https://${vercelUrl}`;
       const webhookPath = `/api/webhook/${token}`;
@@ -199,8 +191,12 @@ const setupWebhook = (app) => {
       
       console.log(`Webhook URL'si ayarlanıyor: ${fullWebhookUrl}`);
       
-      // Webhook temizle ve yeniden ayarla
-      bot.setWebHook(fullWebhookUrl)
+      // Webhook'u temizle ve yeniden ayarla
+      bot.deleteWebHook()
+        .then(() => {
+          console.log('Eski webhook temizlendi');
+          return bot.setWebHook(fullWebhookUrl);
+        })
         .then(() => {
           console.log(`Webhook başarıyla ayarlandı: ${fullWebhookUrl}`);
         })
@@ -218,10 +214,10 @@ const setupWebhook = (app) => {
           
           if (!update) {
             console.error('Boş update alındı');
-            return res.sendStatus(200); // Telegram expects 200 OK even for errors
+            return res.sendStatus(200);
           }
           
-          console.log('Update verisi:', JSON.stringify(update).slice(0, 200) + '...');
+          console.log('Update verisi alındı');
           
           // Mesajı doğrudan işle
           bot.processUpdate(update);
@@ -230,8 +226,26 @@ const setupWebhook = (app) => {
           return res.sendStatus(200);
         } catch (error) {
           console.error('Webhook isteği işlenirken hata oluştu:', error);
-          return res.sendStatus(200); // Telegram expects 200 OK even for errors
+          return res.sendStatus(200);
         }
+      });
+      
+      // Webhook durumunu kontrol etmek için endpoint
+      app.get('/api/bot/webhook-status', (req, res) => {
+        bot.getWebHookInfo()
+          .then(info => {
+            res.json({
+              status: 'success',
+              webhook: info,
+              botUrl: fullWebhookUrl
+            });
+          })
+          .catch(error => {
+            res.status(500).json({
+              status: 'error',
+              error: error.message
+            });
+          });
       });
       
       // Botun durumunu kontrol etmek için bir endpoint
@@ -245,7 +259,8 @@ const setupWebhook = (app) => {
                 name: botInfo.first_name,
                 username: botInfo.username
               },
-              mode: usePolling ? 'polling' : 'webhook'
+              mode: 'webhook',
+              webhookUrl: fullWebhookUrl
             });
           })
           .catch(error => {

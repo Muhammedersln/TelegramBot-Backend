@@ -23,10 +23,9 @@ app.use(express.json({
 
 // Webhook pathlerini log'la (debug için)
 app.use((req, res, next) => {
-  console.log('Request received:', req.method, req.path);
-  console.log('Headers:', JSON.stringify(req.headers));
+  console.log('İstek alındı:', req.method, req.path);
   
-  // Bot isteklerini kabul et
+  // Bot isteklerini öncelikli olarak işle
   if (req.path.includes('/api/webhook/')) {
     console.log('Bot webhook isteği alındı');
   }
@@ -42,6 +41,19 @@ app.get('/', (req, res) => {
 app.get('/api/status', (req, res) => {
   res.json({ status: 'ercenk bot backend çalışıyor' });
 });
+
+// Özel endpoint webhook kurulumu için
+app.get('/api/setup-webhook', (req, res) => {
+  try {
+    setupWebhook(app, true); // force parameter
+    res.json({ status: 'success', message: 'Webhook kurulum işlemi başlatıldı' });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+// Bot için webhook'u ayarla
+setupWebhook(app);
 
 // Mock verileri API endpoint'leri
 // Airdrop verileri API endpoint'i
@@ -65,9 +77,6 @@ app.get('/api/exchanges', (req, res) => {
   
   res.json(exchangeData);
 });
-
-// Bot için webhook'u ayarla
-setupWebhook(app);
 
 // 404 handler - en sonda olmalı
 app.use((req, res) => {
