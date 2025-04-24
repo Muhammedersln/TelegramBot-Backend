@@ -1,5 +1,9 @@
 require('dotenv').config();
+const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
+
+const app = express();
+app.use(express.json());
 
 // Bot token
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -8,15 +12,32 @@ if (!token) {
 }
 
 // Bot oluşturulması
-const options = process.env.NODE_ENV === 'production' 
-  ? { webHook: { port: process.env.PORT || 3000 } }
-  : { polling: true };
+const isDevelopment = !process.env.VERCEL_URL;
+const bot = new TelegramBot(token, { webHook: !isDevelopment });
 
-const url = process.env.VERCEL_URL;
-const bot = new TelegramBot(token, options);
-
-if (process.env.NODE_ENV === 'production') {
+// Webhook ayarları
+if (!isDevelopment) {
+  const url = `https://${process.env.VERCEL_URL}`;
   bot.setWebHook(`${url}/webhook/${token}`);
+}
+
+// Webhook endpoint'i
+app.post(`/webhook/${token}`, (req, res) => {
+  bot.handleUpdate(req.body);
+  res.sendStatus(200);
+});
+
+// Health check endpoint'i
+app.get('/', (req, res) => {
+  res.status(200).json({ status: 'OK' });
+});
+
+// Express sunucusunu başlat
+const PORT = process.env.PORT || 3000;
+if (isDevelopment) {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
 }
 
 // Mock veri - Airdroplar ve borsalar
@@ -175,4 +196,5 @@ bot.on('message', (msg) => {
   }
 });
 
-module.exports = bot; 
+// Export Express app
+module.exports = app; 
