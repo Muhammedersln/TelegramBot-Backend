@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { port } = require('./config');
-const bot = require('./bot');
+const { setupWebhook } = require('./bot');
 
 // Express uygulaması oluştur
 const app = express();
@@ -11,8 +11,12 @@ app.use(cors());
 app.use(express.json());
 
 // API status endpoint
+app.get('/', (req, res) => {
+  res.json({ status: 'ercenk bot backend çalışıyor' });
+});
+
 app.get('/api/status', (req, res) => {
-  res.json({ status: 'Kusha Kripto Bot API çalışıyor' });
+  res.json({ status: 'ercenk bot backend çalışıyor' });
 });
 
 // Mock verileri API endpoint'leri
@@ -38,8 +42,15 @@ app.get('/api/exchanges', (req, res) => {
   res.json(exchangeData);
 });
 
-// Sunucuyu başlat
-app.listen(port, () => {
-  console.log(`Sunucu ${port} portunda çalışıyor`);
-  console.log('Telegram Bot aktif');
-}); 
+// Bot için webhook'u ayarla
+setupWebhook(app);
+
+// Sunucuyu başlat (development ortamında)
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(port, () => {
+    console.log(`Sunucu ${port} portunda çalışıyor`);
+  });
+}
+
+// Vercel için app'i export et
+module.exports = app; 

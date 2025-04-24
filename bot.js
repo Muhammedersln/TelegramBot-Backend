@@ -1,9 +1,5 @@
 require('dotenv').config();
-const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
-
-const app = express();
-app.use(express.json());
 
 // Bot token
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -11,34 +7,9 @@ if (!token) {
   throw new Error('TELEGRAM_BOT_TOKEN is not defined in environment variables');
 }
 
-// Bot oluşturulması
+// Bot oluşturulması - production'da webhook kullan, development'ta polling
 const isDevelopment = !process.env.VERCEL_URL;
-const bot = new TelegramBot(token, { webHook: !isDevelopment });
-
-// Webhook ayarları
-if (!isDevelopment) {
-  const url = `https://${process.env.VERCEL_URL}`;
-  bot.setWebHook(`${url}/webhook/${token}`);
-}
-
-// Webhook endpoint'i
-app.post(`/webhook/${token}`, (req, res) => {
-  bot.handleUpdate(req.body);
-  res.sendStatus(200);
-});
-
-// Health check endpoint'i
-app.get('/', (req, res) => {
-  res.status(200).json({ status: 'OK' });
-});
-
-// Express sunucusunu başlat
-const PORT = process.env.PORT || 3000;
-if (isDevelopment) {
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-}
+const bot = new TelegramBot(token, { polling: isDevelopment });
 
 // Mock veri - Airdroplar ve borsalar
 const airdropData = [
@@ -186,15 +157,35 @@ bot.on('callback_query', (callbackQuery) => {
   bot.answerCallbackQuery(callbackQuery.id);
 });
 
-// Diğer mesajlara yanıt
+// Diğer mesajlara yanıt (polling modundayken)
 bot.on('message', (msg) => {
   const chatId = msg.chat.id;
   
-  // Önceden tanımlanmış komutlar dışındaki mesajlar için
-  if (!msg.text || !msg.text.match(/^\/start/)) {
+  // Sadece /start dışındaki mesajları ve callback query olmayanları yakala (polling için)
+  if (isDevelopment && !msg.text?.match(/^\/start/) && !msg.callback_query) {
     bot.sendMessage(chatId, 'Anlaşılmadı. Lütfen menüden bir seçenek seçin veya /start yazarak başlangıç menüsüne dönün.');
   }
 });
 
-// Export Express app
-module.exports = app; 
+// Webhook'u ayarlama fonksiyonu
+const setupWebhook = (app) => {
+  if (!isDevelopment) {
+    const url = `https://${process.env.VERCEL_URL}`;
+    bot.setWebHook(`${url}/webhook/${token}`);
+    
+    // Gelen webhook isteklerini işle
+    app.post(`/webhook/${token}`, (req, res) => {
+      bot.processUpdate(req.body);
+      res.sendStatus(200);
+    });
+    console.log(`Webhook set to: ${url}/webhook/${token}`);
+  } else {
+    console.log("Bot running in polling mode.");
+  }
+};
+
+// Bot instance'ını ve webhook ayarlama fonksiyonunu export et
+module.exports = {
+  bot,
+  setupWebhook
+}; 
