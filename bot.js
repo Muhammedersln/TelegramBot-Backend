@@ -4,9 +4,9 @@ const TelegramBot = require('node-telegram-bot-api');
 // Bot token
 const token = process.env.TELEGRAM_BOT_TOKEN || '7861575530:AAFenotTwpAqjLoEFalw3vDBkDrZq8Vse8A';
 
-// Botun çalışma modunu belirle - webhook moduna geçiyoruz
+// Botun çalışma modunu belirle - polling moduna geçiyoruz
 const isDevelopment = process.env.NODE_ENV !== 'production';
-const usePolling = false; // Polling'i devre dışı bırak
+const usePolling = true; // Polling'i aktif et
 
 let bot;
 
@@ -29,7 +29,7 @@ try {
 } catch (error) {
   console.error('Bot örneği oluşturulurken hata:', error);
   // Fallback bot oluştur
-  bot = new TelegramBot(token, { polling: false });
+  bot = new TelegramBot(token, { polling: true });
 }
 
 // Mock veri - Airdroplar ve borsalar
